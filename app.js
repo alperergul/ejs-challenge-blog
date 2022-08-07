@@ -3,6 +3,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
+const mongoose = require("mongoose");
 const _ = require("lodash");
 
 const homeStartingContent =
@@ -19,10 +20,28 @@ app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
-let posts = [];
+main().catch((err) => console.log(err));
+
+async function main() {
+  await mongoose.connect("mongodb://localhost:27017/blogDB");
+}
+
+const postsSchema = new mongoose.Schema({
+  postName: String,
+  postBody: String,
+});
+
+const Post = mongoose.model("Post", postsSchema);
 
 app.get("/", function (req, res) {
-  res.render("home", { startingContent: homeStartingContent, posts: posts });
+  Post.find({}, (err, foundedPosts) => {
+    if (!err) {
+      res.render("home", {
+        startingContent: homeStartingContent,
+        posts: foundedPosts,
+      });
+    }
+  });
 });
 
 app.get("/about", function (req, res) {
@@ -37,25 +56,30 @@ app.get("/compose", function (req, res) {
   res.render("compose");
 });
 
-app.get("/post/:postName", function (req, res) {
-  const requestedTitle = _.lowerCase(req.params.postName);
-  posts.forEach((post) => {
-    if (_.lowerCase(post.postName) === requestedTitle) {
-      postName = post.postName;
-      postBody = post.postBody;
+app.get("/post/:postId", function (req, res) {
+  const requestedId = req.params.postId;
+
+  Post.findOne({ _id: requestedId }, (err, foundedPost) => {
+    if (!err) {
+      res.render("post", {
+        postName: foundedPost.postName,
+        postBody: foundedPost.postBody,
+      });
     }
   });
-  res.render("post", { postName: postName, postBody: postBody });
 });
 
 app.post("/compose", function (req, res) {
-  const post = {
+  const post = new Post({
     postName: req.body.postName,
     postBody: req.body.postBody,
-  };
+  });
 
-  posts.push(post);
-  res.redirect("/");
+  post.save((err) => {
+    if (!err) {
+      res.redirect("/");
+    }
+  });
 });
 
 app.listen(3000, function () {
